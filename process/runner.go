@@ -27,7 +27,7 @@ type Result struct {
 func Run(cfg cli.Config, cg *cgroup.Cgroup, onStats func(cgroup.Stats)) (Result, error) {
 	start := time.Now()
 	result := Result{Command: shellJoin(cfg.Command), ExitReason: "clean"}
-	recordStats := func(st cgroup.Stats) {
+	recordStats := func(st cgroup.Stats, render bool) {
 		if st.MemoryCurrent > result.PeakMemoryBytes {
 			result.PeakMemoryBytes = st.MemoryCurrent
 		}
@@ -37,7 +37,7 @@ func Run(cfg cli.Config, cg *cgroup.Cgroup, onStats func(cgroup.Stats)) (Result,
 		result.CPUTime = st.CPUUsage
 		result.OOMEvents = st.OOM
 		result.OOMKills = st.OOMKill
-		if onStats != nil {
+		if render && onStats != nil {
 			onStats(st)
 		}
 		if st.OOMKill > 0 {
@@ -66,7 +66,7 @@ func Run(cfg cli.Config, cg *cgroup.Cgroup, onStats func(cgroup.Stats)) (Result,
 			_ = cmd.Process.Kill()
 			return result, err
 		}
-		recordStats(cg.Snapshot())
+		recordStats(cg.Snapshot(), true)
 	}
 
 	waitCh := make(chan error, 1)
@@ -93,7 +93,7 @@ func Run(cfg cli.Config, cg *cgroup.Cgroup, onStats func(cgroup.Stats)) (Result,
 	for waitCh != nil {
 		select {
 		case st := <-statsCh:
-			recordStats(st)
+			recordStats(st, true)
 		case <-timeoutCh:
 			timedOut = true
 			result.ExitReason = "timeout"
@@ -115,7 +115,7 @@ func Run(cfg cli.Config, cg *cgroup.Cgroup, onStats func(cgroup.Stats)) (Result,
 	}
 
 	cancel()
-	recordStats(cg.Snapshot())
+	recordStats(cg.Snapshot(), false)
 	result.WallTime = time.Since(start)
 	if result.OOMKills > 0 {
 		result.ExitReason = "oom"

@@ -41,7 +41,7 @@ func (l *Live) Update(st cgroup.Stats) {
 	}
 	now := time.Now()
 	cpuPercent := l.cpuPercent(st.CPUUsage, now)
-	line("clamp: %s [%s]", strings.Join(l.cfg.Command, " "), mode)
+	line("clamp: %s [%s]", l.commandLabel(), mode)
 	line("----------------------------------------")
 	line("  memory   %-19s %s", l.memoryLabel(st), l.memoryBar(st))
 	line("  cpu      %-19s %s", l.cpuLabel(st.CPUUsage, cpuPercent), l.cpuBar(cpuPercent))
@@ -114,6 +114,19 @@ func (l *Live) pidsLabel(st cgroup.Stats) string {
 		return fmt.Sprintf("%d / %d", st.PidsCurrent, l.cfg.Pids)
 	}
 	return fmt.Sprintf("%d", st.PidsCurrent)
+}
+
+func (l *Live) commandLabel() string {
+	const maxLen = 72
+	label := strings.Join(l.cfg.Command, " ")
+	label = strings.Join(strings.Fields(label), " ")
+	if len(label) <= maxLen {
+		return label
+	}
+	if maxLen <= 3 {
+		return label[:maxLen]
+	}
+	return label[:maxLen-3] + "..."
 }
 
 func (l *Live) cpuPercent(total time.Duration, now time.Time) float64 {
