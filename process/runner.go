@@ -27,6 +27,23 @@ type Result struct {
 func Run(cfg cli.Config, cg *cgroup.Cgroup, onStats func(cgroup.Stats)) (Result, error) {
 	start := time.Now()
 	result := Result{Command: shellJoin(cfg.Command), ExitReason: "clean"}
+	recordStats := func(st cgroup.Stats) {
+		if st.MemoryCurrent > result.PeakMemoryBytes {
+			result.PeakMemoryBytes = st.MemoryCurrent
+		}
+		if st.MemoryPeak > result.PeakMemoryBytes {
+			result.PeakMemoryBytes = st.MemoryPeak
+		}
+		result.CPUTime = st.CPUUsage
+		result.OOMEvents = st.OOM
+		result.OOMKills = st.OOMKill
+		if onStats != nil {
+			onStats(st)
+		}
+		if st.OOMKill > 0 {
+			result.ExitReason = "oom"
+		}
+	}
 
 	cmd, err := buildCommand(cfg, cg)
 	if err != nil {
@@ -49,6 +66,7 @@ func Run(cfg cli.Config, cg *cgroup.Cgroup, onStats func(cgroup.Stats)) (Result,
 			_ = cmd.Process.Kill()
 			return result, err
 		}
+		recordStats(cg.Snapshot())
 	}
 
 	waitCh := make(chan error, 1)
@@ -75,21 +93,7 @@ func Run(cfg cli.Config, cg *cgroup.Cgroup, onStats func(cgroup.Stats)) (Result,
 	for waitCh != nil {
 		select {
 		case st := <-statsCh:
-			if st.MemoryCurrent > result.PeakMemoryBytes {
-				result.PeakMemoryBytes = st.MemoryCurrent
-			}
-			if st.MemoryPeak > result.PeakMemoryBytes {
-				result.PeakMemoryBytes = st.MemoryPeak
-			}
-			result.CPUTime = st.CPUUsage
-			result.OOMEvents = st.OOM
-			result.OOMKills = st.OOMKill
-			if onStats != nil {
-				onStats(st)
-			}
-			if st.OOMKill > 0 {
-				result.ExitReason = "oom"
-			}
+			recordStats(st)
 		case <-timeoutCh:
 			timedOut = true
 			result.ExitReason = "timeout"
@@ -111,16 +115,7 @@ func Run(cfg cli.Config, cg *cgroup.Cgroup, onStats func(cgroup.Stats)) (Result,
 	}
 
 	cancel()
-	final := cg.Snapshot()
-	if final.MemoryCurrent > result.PeakMemoryBytes {
-		result.PeakMemoryBytes = final.MemoryCurrent
-	}
-	if final.MemoryPeak > result.PeakMemoryBytes {
-		result.PeakMemoryBytes = final.MemoryPeak
-	}
-	result.CPUTime = final.CPUUsage
-	result.OOMEvents = final.OOM
-	result.OOMKills = final.OOMKill
+	recordStats(cg.Snapshot())
 	result.WallTime = time.Since(start)
 	if result.OOMKills > 0 {
 		result.ExitReason = "oom"
@@ -196,6 +191,14 @@ func poll(ctx context.Context, cg *cgroup.Cgroup, interval time.Duration, out ch
 	if interval <= 0 {
 		interval = 500 * time.Millisecond
 	}
+	sendStats := func() {
+		st := cg.Snapshot()
+		select {
+		case out <- st:
+		default:
+		}
+	}
+	sendStats()
 	t := time.NewTicker(interval)
 	defer t.Stop()
 	for {
@@ -203,11 +206,7 @@ func poll(ctx context.Context, cg *cgroup.Cgroup, interval time.Duration, out ch
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			st := cg.Snapshot()
-			select {
-			case out <- st:
-			default:
-			}
+			sendStats()
 		}
 	}
 }
