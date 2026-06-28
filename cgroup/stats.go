@@ -10,6 +10,7 @@ import (
 
 type Stats struct {
 	MemoryCurrent int64
+	MemoryPeak    int64
 	CPUUsage      time.Duration
 	PidsCurrent   int64
 	OOM           int64
@@ -19,6 +20,7 @@ type Stats struct {
 func (cg *Cgroup) Snapshot() Stats {
 	var s Stats
 	s.MemoryCurrent = readInt(filepath.Join(cg.Path, "memory.current"))
+	s.MemoryPeak = readInt(filepath.Join(cg.Path, "memory.peak"))
 	s.PidsCurrent = readInt(filepath.Join(cg.Path, "pids.current"))
 	s.CPUUsage = time.Duration(readKeyInt(filepath.Join(cg.Path, "cpu.stat"), "usage_usec")) * time.Microsecond
 	s.OOM = readKeyInt(filepath.Join(cg.Path, "memory.events"), "oom")

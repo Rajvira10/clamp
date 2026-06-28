@@ -78,6 +78,9 @@ func Run(cfg cli.Config, cg *cgroup.Cgroup, onStats func(cgroup.Stats)) (Result,
 			if st.MemoryCurrent > result.PeakMemoryBytes {
 				result.PeakMemoryBytes = st.MemoryCurrent
 			}
+			if st.MemoryPeak > result.PeakMemoryBytes {
+				result.PeakMemoryBytes = st.MemoryPeak
+			}
 			result.CPUTime = st.CPUUsage
 			result.OOMEvents = st.OOM
 			result.OOMKills = st.OOMKill
@@ -111,6 +114,9 @@ func Run(cfg cli.Config, cg *cgroup.Cgroup, onStats func(cgroup.Stats)) (Result,
 	final := cg.Snapshot()
 	if final.MemoryCurrent > result.PeakMemoryBytes {
 		result.PeakMemoryBytes = final.MemoryCurrent
+	}
+	if final.MemoryPeak > result.PeakMemoryBytes {
+		result.PeakMemoryBytes = final.MemoryPeak
 	}
 	result.CPUTime = final.CPUUsage
 	result.OOMEvents = final.OOM
