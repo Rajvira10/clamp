@@ -71,15 +71,12 @@ func isTTY(f *os.File) bool {
 
 func (l *Live) memoryLabel(st cgroup.Stats) string {
 	current := st.MemoryCurrent
-	if current == 0 {
+	if st.MemoryPeak > current {
 		current = st.MemoryPeak
 	}
 	label := formatBytes(current)
 	if l.cfg.MemoryBytes > 0 {
 		label += " / " + formatBytes(l.cfg.MemoryBytes)
-	}
-	if st.MemoryPeak > current {
-		label += " peak " + formatBytes(st.MemoryPeak)
 	}
 	return label
 }
@@ -89,7 +86,7 @@ func (l *Live) memoryBar(st cgroup.Stats) string {
 		return bar(0, false)
 	}
 	current := st.MemoryCurrent
-	if current == 0 {
+	if st.MemoryPeak > current {
 		current = st.MemoryPeak
 	}
 	return bar(float64(current)/float64(l.cfg.MemoryBytes), true)
